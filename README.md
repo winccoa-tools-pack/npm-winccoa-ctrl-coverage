@@ -1,197 +1,126 @@
----
-Minimal starter template for creating shared WinCC OA NPM libraries
-THIS IS AN EXAMPLE README
----
-
-
-# WinCC OA UI PNL/XML Converter
+# npm-winccoa-ctrl-coverage
 
 <!-- markdownlint-disable MD033 -->
 <div align="center">
 
-[![npm version](https://img.shields.io/npm/v/@winccoa-tools-pack/npm-winccoa-template.svg?label=npm)](https://www.npmjs.com/package/@winccoa-tools-pack/npm-winccoa-template)
-![License](https://img.shields.io/github/license/winccoa-tools-pack/template-npm-shared-library)
-[![CI/CD](https://github.com/winccoa-tools-pack/template-npm-shared-library/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/winccoa-tools-pack/template-npm-shared-library/actions/workflows/ci-cd.yml)
-[![Release](https://github.com/winccoa-tools-pack/template-npm-shared-library/actions/workflows/release.yml/badge.svg)](https://github.com/winccoa-tools-pack/template-npm-shared-library/actions/workflows/release.yml)
+[![npm version](https://img.shields.io/npm/v/@winccoa-tools-pack/npm-winccoa-ctrl-coverage.svg?label=npm)](https://www.npmjs.com/package/@winccoa-tools-pack/npm-winccoa-ctrl-coverage)
+![License](https://img.shields.io/github/license/winccoa-tools-pack/npm-winccoa-ctrl-coverage)
+[![CI/CD](https://github.com/winccoa-tools-pack/npm-winccoa-ctrl-coverage/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/winccoa-tools-pack/npm-winccoa-ctrl-coverage/actions/workflows/ci-cd.yml)
+[![Release](https://github.com/winccoa-tools-pack/npm-winccoa-ctrl-coverage/actions/workflows/release.yml/badge.svg)](https://github.com/winccoa-tools-pack/npm-winccoa-ctrl-coverage/actions/workflows/release.yml)
 
 </div>
+<!-- markdownlint-enable MD033 -->
 
-A lightweight developer tool for SIMATIC WinCC Open Architecture projects, providing reliable PNL ⇄ XML transformations for UI panels.
-This package is part of the modular winccoa-tools-pack ecosystem, which delivers modern development tooling,
-reusable libraries, and VS Code extensions for WinCC OA engineers.
-[github.com](https://github.com/winccoa-tools-pack)
+CLI and API that merge WinCC OA **CTRL coverage reports** (`CovRep_*.xml`) and produce text, JSON, Markdown and Cobertura reports.
 
-## ✨ Features
+WinCC OA writes the raw data itself: a `WCCOActrl`/`WCCOAui` manager started with the config entry `CTRL_COVERAGE = "dbg"` and `-coveragereportfile <file>` records which CTRL lines and functions were executed.
+The TestFramework switches this on per test project (`"CTRL_COVERAGE": true` in `testProj*.config`) and stores one `CovRep_<date>_<script>_<manager>.xml` per manager in the test project's `log` directory.
+This package merges those files and turns them into a report.
 
-- **PNL → XML conversion**  
-  Transform classic .pnl UI panel files into structured XML suitable for analysis, automation, and editor tooling.
+## Install and run
 
-- **XML → PNL conversion**  
-  Regenerate WinCC OA .pnl files from XML to enable round-trip workflows and external processing.
-
-- **Tooling-friendly design**  
-  Built to integrate with next-generation WinCC OA development tools such as VS Code extensions,
-  reusable workflows, and advanced analysis pipelines,
-  consistent with the overall goals of the winccoa-tools-pack organization.
-
-- **Modern project template**  
-  Generated from the shared npm-winccoa-template to ensure consistent structure, CI/CD, TypeScript setup, linting, and maintainability across the ecosystem.
-
-## 📦 Installation
-
-```shell
-npm install @winccoa-tools-pack/npm-winccoa-ui-pnl-xml
+```sh
+npm install --save-dev @winccoa-tools-pack/npm-winccoa-ctrl-coverage
+npx winccoa-ctrl-coverage <input...> [options]
 ```
 
-Or globally:
+Inputs are files or directories. Directories are searched recursively for `CovRep_*.xml` (and `CoverageReport_*.xml`). Inputs are never modified.
 
-```shell
-npm install -g @winccoa-tools-pack/npm-winccoa-ui-pnl-xml
+```sh
+# merge everything in a test project's log directory, report only the repository sources
+winccoa-ctrl-coverage Projects/Running/Unit_3.22/log \
+  --root "$PWD" --include "src/Splash/**" --sources src/Splash \
+  --json coverage.json --cobertura cobertura.xml --markdown coverage.md
 ```
 
-## 🖥 Usage (CLI)
+| Option | Meaning |
+| --- | --- |
+| `--root <dir>` | Report paths below `<dir>` relative to it. |
+| `--include <glob>` / `--exclude <glob>` | Keep only / drop matching reported paths. Repeatable. `*` does not match `/`, `**` matches any path, `?` is one character. Matching is case-insensitive. |
+| `--sources <dir>` | List `*.ctl` files below `<dir>` that have no coverage data as **untested**. Repeatable. |
+| `--json`, `--cobertura`, `--markdown <file>` | Write the report in that format (parent directories are created). |
+| `--min-lines <pct>`, `--min-functions <pct>` | Exit with `1` when the rate is below the threshold. |
+| `--allow-empty` | Do not fail when no file has coverage data. |
+| `--verbose`, `--quiet` | Per-file rows on the console / no console report. |
 
-```shell
-# Convert .pnl → .xml (in-place)
-winccoa-pnl-xml convert pnl-to-xml about.pnl --version 3.20
+Exit codes: `0` ok, `1` threshold not met, `2` invalid input or usage.
 
-# Convert .xml → .pnl (in-place)
-winccoa-pnl-xml convert xml-to-pnl about.xml --version 3.20
+API:
 
-# Optional flags
-#   --config <path>   Use a specific project config file
-#   --overwrite       Overwrite existing output files
-#   --timeout <ms>    Increase process timeout
+```ts
+import { readCoverage, buildDetailedReport, renderJson, renderCobertura } from '@winccoa-tools-pack/npm-winccoa-ctrl-coverage';
+
+const { data, inputs, warnings } = readCoverage(['Projects/Running/Unit_3.22/log']);
+const detailed = buildDetailedReport(data, { root: process.cwd(), include: ['src/Splash/**'], inputs, warnings });
+const json = renderJson(detailed.report);
 ```
 
-## ⚠️ Important behavior
+## What is measured
 
-- Conversion is performed by WinCC OA `WCCOAui` and is **in-place** (the input file is rewritten).
-- WinCC OA may create a `.bak` file next to the input.
-- The input passed to `-p` is typically resolved relative to the project’s `panels/` directory.
-  Use `--config` if you need to point the converter at a specific project context.
+- **Lines:** a line is _coverable_ if the WinCC OA interpreter emitted at least one `<node>` for it, and _covered_ if the highest hit count of its nodes is greater than 0.
+  Comments, blank lines and lines without executable nodes are not counted.
+  Nodes outside a function (script globals) are counted; `line <= 0` is ignored.
+- **Functions:** every `<func>` (including class methods) is coverable; it is covered if it was called at least once. The synthetic `[init script globals]` function is included.
+- **Branches:** the `executed`/`total` values WinCC OA reports per function, summed.
+- **Merging:** several inputs (managers, test runs) are merged per file. Line hits and function call counts keep the **maximum**; functions are identified by name, signature and line. Merging is therefore "covered by at least one run", not a sum of calls.
+- **Rates** are fractions in the range 0..1 (`covered / total`); `0` when there is nothing coverable.
 
-## 🧩 Usage (API)
+### Which files are included
 
-```typescript
-import { pnlToXml, xmlToPnl } from "@winccoa-tools-pack/npm-winccoa-ui-pnl-xml";
+The coverage data contains **every script a manager loaded**: the code under test, the test scripts themselves, and the WinCC OA product libraries (`<WinCC OA>/scripts/libs/...`). The package does not decide what is "yours":
 
-// Note: WinCC OA performs the conversion in-place and may create a .bak backup.
-// The input path is typically resolved relative to the project’s panels/ directory.
+- **Library / product files:** use `--include` / `--exclude` to keep only your sources, e.g. `--include "src/Splash/**"`.
+- **Test and generated files:** appear like any other script. Exclude them (`--exclude "tests/**"`) if they should not count.
+- **Untested files:** a script that no manager loaded has no data and cannot be counted line by line. With `--sources` such files are listed separately and are **not** part of any rate, so the percentages describe only code that was loaded. Compare the untested list with the rates before drawing conclusions.
 
-const pnlToXmlResult = await pnlToXml({
-  version: "3.20",
-  inputPath: "about.pnl",
-  // configPath: "C:/path/to/project/config/config",
-  // overwrite: true,
-  // timeout: 120_000,
-});
+## Report formats
 
-if (!pnlToXmlResult.success) {
-  throw new Error(`Conversion failed (exit ${pnlToXmlResult.exitCode}): ${pnlToXmlResult.stderr}`);
-}
+- **Text:** console summary, optionally one row per file.
+- **JSON** (`schemaVersion: 1`): `{ schemaVersion, tool, inputs, summary, files[], untested[], warnings[] }`, where `summary` and every entry of `files` hold `lines`, `functions` and `branches` as `{ covered, total, rate }`. Field names are stable within a `schemaVersion`.
+- **Cobertura XML:** coverage-04 DTD, one package per directory, usable with common coverage viewers and CI plugins. Only line and method data are included; per-class branch rates are `0`.
+- **Markdown:** summary table, per-file table and the untested list, suitable for `$GITHUB_STEP_SUMMARY`.
 
-const xmlToPnlResult = await xmlToPnl({
-  version: "3.20",
-  inputPath: "about.xml",
-});
+## Failure behavior
 
-console.log({ pnlToXmlResult, xmlToPnlResult });
-```
+Invalid input is an error, never a clean report:
 
-More details: see [docs/USAGE.md](docs/USAGE.md).
+- a missing path, an unreadable file, an empty or non-XML file, mismatched tags, stray markup or non-numeric counters stop the run with exit code `2` and a message naming the file and line;
+- if the filters leave no file with coverage data the run fails (`2`) unless `--allow-empty` is given;
+- all outputs are rendered first and written afterwards, so a failing run never leaves a partial report; the input files are never touched, so raw artifacts stay available for analysis.
 
-## 🩺 Troubleshooting
+A `<script>` without a `<file path>` is skipped with a warning (printed and stored in the report). A coverage file without any script (for example from `pmon`) is valid and contributes nothing.
 
-- Non-zero exit code: inspect `stderr` and ensure `--version` matches your WinCC OA installation.
-- Timeouts on large panels: increase `--timeout` / `timeout`.
-- File not found: remember `inputPath` is usually relative to `panels/` in the active project context.
+## Limitations
 
-## 📚 Ecosystem Integration
+- Coverage is only produced by WinCC OA managers started with `CTRL_COVERAGE`; the TestFramework enables it per test project. It was verified with WinCC OA 3.21 on Windows; check the entry on other platforms and versions.
+- Only executed CTRL lines and functions are measured, not data-flow or condition coverage beyond the branch counters WinCC OA reports.
+- The files are large (several MB per manager); merging 9 files / 33 MB takes about one second.
+- `.zip` archives (for example stored test projects) are not read directly; extract them first.
 
-This package is designed for seamless use with:
+## Relationship to Siemens `ctlCoverageReport`
 
-- **VS Code extensions for WinCC OA development**  
-  Our open source community provides multiple VS Code tools that enhance the engineering workflow
-  for WinCC OA developers. This converter acts as a foundation for UI-related features such as the Panel Explorer.
+This package is a clean-room implementation of the documented `CovRep` XML structure and does not contain code from the Siemens CtrlppCheck tool. See [docs/reuse-review.md](docs/reuse-review.md).
 
-- **Node.js libraries**  
-  Works side-by-side with other libraries in the winccoa-tools-pack suite (project management, core utilities, testing, etc.).
+## Development
 
-- **CI/CD automation**  
-  Ideal for pipelines needing validation or transformation of UI panel resources.
-
-- **Automation tokens** are recommended for CI/CD (they don't expire but can be revoked)
-- The token needs **publish** permission for your package scope
-- For scoped packages (`@winccoa-tools-pack/...`), ensure your NPM organization allows publishing
-
-### Testing Without NPM_TOKEN
-
-If `NPM_TOKEN` is not configured, the workflow will:
-
-- ✅ Still run tests and build the package
-- ✅ Create GitHub releases with artifacts
-- ⚠️ Skip NPM publishing with a warning message
-
-You can always publish manually later:
-
-```bash
-npm publish --access public
-```
-
-## 📦 Development
-
-```bash
-# Install dependencies
+```sh
 npm install
-
-# Build the library
-npm run build
-
-# Run tests
-npm test
-
-# Lint code
-npm run lint
+npm test            # style check, build, unit tests
+npm run style-fix   # eslint --fix, prettier, markdownlint --fix
 ```
 
-## 🏆 Recognition
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the Git flow and release process.
 
-Special thanks to all our [contributors](https://github.com/orgs/winccoa-tools-pack/people) who make this project possible!
+## License
 
-### Key Contributors
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
-- **Martin Pokorny** ([@mPokornyETM](https://github.com/mPokornyETM)) - Creator & Lead Developer
-- And many more amazing contributors!
-
----
-
-## 📜 License
-
-This project is licensed under the **MIT License** - see the [LICENSE](https://github.com/winccoa-tools-pack/.github/blob/main/LICENSE) file for details.
-
-It might happen that partial repositories contain third party SW which uses other license models.
-
----
-
-## ⚠️ Disclaimer
+## Disclaimer
 
 **WinCC OA** and **Siemens** are trademarks of Siemens AG.
 This project is not affiliated with, endorsed by, or sponsored by Siemens AG.
 This is a community-driven open source project created to enhance the development experience for WinCC OA developers.
 
 ---
-
-## 🎉 Thank You
-
-Thank you for using WinCC OA tools package! We're excited to be part of your development journey.
-
-Happy Coding! 🚀
-
----
-
-## Quick Links
-
-[📦 VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=mPokornyETM.wincc-oa-projects)
 
 Made with ❤️ for and by the WinCC OA community

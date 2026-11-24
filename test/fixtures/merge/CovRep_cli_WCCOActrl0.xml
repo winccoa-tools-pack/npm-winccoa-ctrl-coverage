@@ -1,0 +1,35 @@
+<report>
+<coverage>
+<script>
+    Script: C:\proj\src\lib\a.ctl
+
+<location>
+<file path="C:/proj/src/lib/a.ctl"/>
+</location>
+<func line="5"
+ name="f2"
+ signature="void f2()"
+ count="2"
+>f2
+<node line="6" count="2" type="var"/>
+<node line="7" count="0" type="id"/>
+<branches total="0" executed="0" ratio="0"/>
+</func>
+</script>
+<script>
+    Script: C:\proj\src\lib\b.ctl
+
+<location>
+<file path="C:\proj\src\lib\b.ctl"/>
+</location>
+<func line="1"
+ name="h"
+ signature="void h()"
+ count="0"
+>h
+<node line="2" count="0" type="id"/>
+<branches total="0" executed="0" ratio="0"/>
+</func>
+</script>
+</coverage>
+</report>
