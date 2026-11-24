@@ -1,0 +1,48 @@
+<report>
+<coverage>
+<script>
+    Script: C:\proj\src\lib\a.ctl
+
+<location>
+<file path="C:\proj\src\lib\a.ctl"/>
+</location>
+<node line="1" count="1" type="var"/>
+<func line="1"
+ name="f1"
+ signature="int f1(const string &amp;s)"
+ count="1"
+ interpreterTime="0"
+>f1
+<node line="2" count="1" type="var"/>
+<node line="2" count="0" type="id"/>
+<node line="3" count="1" type="fcall" name="dpGet"/>
+<branches total="2" executed="1" ratio="0.5"/>
+</func>
+<func line="5"
+ name="f2"
+ signature="void f2()"
+ count="0"
+ interpreterTime="0"
+>f2
+<node line="6" count="0" type="var"/>
+<node line="7" count="0" type="id"/>
+<branches total="0" executed="0" ratio="0"/>
+</func>
+</script>
+<script>
+    Script: C:\WinCC_OA\3.21\scripts\libs\std.ctl
+
+<location>
+<file path="C:\WinCC_OA\3.21\scripts\libs\std.ctl"/>
+</location>
+<func line="1"
+ name="g"
+ signature="void g()"
+ count="3"
+>g
+<node line="2" count="3" type="id"/>
+<branches total="0" executed="0" ratio="0"/>
+</func>
+</script>
+</coverage>
+</report>

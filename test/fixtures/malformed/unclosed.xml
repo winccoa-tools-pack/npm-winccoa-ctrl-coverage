@@ -1,0 +1,10 @@
+<report>
+<coverage>
+<script>
+<location>
+<file path="C:\proj\src\lib\a.ctl"/>
+</location>
+<func line="1" name="f1" signature="void f1()" count="1">f1
+<node line="2" count="1" type="id"/>
+</func>
+</script>

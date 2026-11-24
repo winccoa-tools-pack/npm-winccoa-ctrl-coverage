@@ -1,202 +1,208 @@
 #!/usr/bin/env node
+import fs from 'node:fs';
+import path from 'node:path';
+import { CoverageInputError } from './errors';
+import { readCoverage } from './read';
+import { renderCobertura, renderJson, renderMarkdown, renderText } from './render';
+import { buildDetailedReport } from './report';
+import { VERSION } from './version';
 
-import { PnlXmlConverter } from './converter';
-import { ConversionDirection } from './types';
-import type { ConversionOptions } from './types';
+const USAGE = `winccoa-ctrl-coverage ${VERSION}
 
-/**
- * CLI exit codes.
- */
-const EXIT_OK = 0;
-const EXIT_USAGE = 1;
-const EXIT_CONVERSION_FAILED = 2;
+Usage: winccoa-ctrl-coverage <input...> [options]
 
-/**
- * Print usage information to stderr.
- */
-function printUsage(): void {
-    const bin = 'winccoa-pnl-xml';
-    process.stderr.write(
-        [
-            '',
-            `Usage: ${bin} <command> [options]`,
-            '',
-            'Commands:',
-            '  convert pnl-to-xml <path>   Convert .pnl panel(s) to XML',
-            '  convert xml-to-pnl <path>   Convert XML file(s) back to .pnl',
-            '',
-            'Options:',
-            '  -v, --version <ver>   WinCC OA version (e.g. 3.20)  [required]',
-            '  -c, --config <path>   WinCC OA project config file',
-            '  -o, --overwrite       Overwrite existing output files',
-            '  -t, --timeout <ms>    Process timeout in milliseconds (default: 60000)',
-            '  -h, --help            Show this help message',
-            '',
-            'Examples:',
-            `  ${bin} convert pnl-to-xml panels/myPanel.pnl -v 3.20`,
-            `  ${bin} convert xml-to-pnl panels/myPanel.xml -v 3.20 -o`,
-            `  ${bin} convert pnl-to-xml panels/ -v 3.20 --timeout 120000`,
-            '',
-        ].join('\n'),
-    );
+Merges WinCC OA CTRL coverage reports (CovRep_*.xml, written by WCCOActrl
+-coveragereportfile / CTRL_COVERAGE in the TestFramework) and reports line,
+function and branch coverage. Inputs are files or directories (searched
+recursively for CovRep_*.xml) and are never modified.
+
+Options:
+  --root <dir>            report paths below <dir> relative to it
+  --include <glob>        keep only matching reported paths (repeatable)
+  --exclude <glob>        drop matching reported paths (repeatable)
+  --sources <dir>         list *.ctl files below <dir> without coverage data as
+                          untested (repeatable; not part of the rates)
+  --json <file>           write the JSON report
+  --cobertura <file>      write the Cobertura XML report
+  --markdown <file>       write a Markdown summary
+  --min-lines <percent>   exit 1 when the line rate is lower
+  --min-functions <pct>   exit 1 when the function rate is lower
+  --allow-empty           do not fail when no file matches (empty report)
+  --verbose               add one row per file to the console report
+  --quiet                 no console report
+  -h, --help              show this help
+  -v, --version           show the version
+
+Exit codes: 0 ok, 1 threshold not met, 2 invalid input or usage.
+Globs: * (not /), ** (any path), ? (one character, not /).
+`;
+
+interface Options {
+    inputs: string[];
+    root?: string;
+    include: string[];
+    exclude: string[];
+    sources: string[];
+    json?: string;
+    cobertura?: string;
+    markdown?: string;
+    minLines?: number;
+    minFunctions?: number;
+    allowEmpty: boolean;
+    verbose: boolean;
+    quiet: boolean;
 }
 
-/**
- * Minimal argument parser.
- * Returns the parsed CLI options or null when the input is invalid.
- */
-interface ParsedArgs {
-    direction: ConversionDirection;
-    inputPath: string;
-    version: string;
-    configPath?: string;
-    overwrite: boolean;
-    timeout?: number;
+function usageError(message: string): never {
+    throw new CoverageInputError(`${message}\nTry 'winccoa-ctrl-coverage --help'.`);
 }
 
-function parseArgs(argv: string[]): ParsedArgs | null {
-    // Strip node + script path
-    const args = argv.slice(2);
-
-    if (args.length === 0 || args.includes('-h') || args.includes('--help')) {
-        return null;
-    }
-
-    // Expect: convert <pnl-to-xml|xml-to-pnl> <path> [options]
-    if (args[0] !== 'convert') {
-        process.stderr.write(`Error: Unknown command "${args[0]}". Expected "convert".\n`);
-        return null;
-    }
-
-    const subCommand = args[1];
-    let direction: ConversionDirection;
-
-    if (subCommand === 'pnl-to-xml') {
-        direction = ConversionDirection.PNL_TO_XML;
-    } else if (subCommand === 'xml-to-pnl') {
-        direction = ConversionDirection.XML_TO_PNL;
-    } else {
-        process.stderr.write(
-            `Error: Unknown sub-command "${subCommand}". Expected "pnl-to-xml" or "xml-to-pnl".\n`,
-        );
-        return null;
-    }
-
-    const inputPath = args[2];
-    if (!inputPath || inputPath.startsWith('-')) {
-        process.stderr.write('Error: Missing input path.\n');
-        return null;
-    }
-
-    let version = '';
-    let configPath: string | undefined;
-    let overwrite = false;
-    let timeout: number | undefined;
-
-    // Parse remaining flags
-    let i = 3;
-    while (i < args.length) {
-        const flag = args[i];
-        switch (flag) {
-            case '-v':
-            case '--version':
-                version = args[++i] ?? '';
-                break;
-            case '-c':
-            case '--config':
-                configPath = args[++i] ?? '';
-                break;
-            case '-o':
-            case '--overwrite':
-                overwrite = true;
-                break;
-            case '-t':
-            case '--timeout': {
-                const raw = args[++i] ?? '';
-                const parsed = Number(raw);
-                if (isNaN(parsed) || parsed <= 0) {
-                    process.stderr.write(`Error: Invalid timeout value "${raw}".\n`);
-                    return null;
-                }
-                timeout = parsed;
-                break;
-            }
-            default:
-                process.stderr.write(`Error: Unknown option "${flag}".\n`);
-                return null;
-        }
-        i++;
-    }
-
-    if (!version) {
-        process.stderr.write('Error: WinCC OA version is required (-v / --version).\n');
-        return null;
-    }
-
-    return { direction, inputPath, version, configPath, overwrite, timeout };
-}
-
-/**
- * Main CLI entry point.
- */
-async function main(): Promise<void> {
-    const parsed = parseArgs(process.argv);
-
-    if (!parsed) {
-        printUsage();
-        process.exitCode = EXIT_USAGE;
-        return;
-    }
-
-    const options: ConversionOptions = {
-        version: parsed.version,
-        inputPath: parsed.inputPath,
-        configPath: parsed.configPath,
-        overwrite: parsed.overwrite,
-        timeout: parsed.timeout,
+function parseArguments(argv: string[]): Options | undefined {
+    const options: Options = {
+        inputs: [],
+        include: [],
+        exclude: [],
+        sources: [],
+        allowEmpty: false,
+        verbose: false,
+        quiet: false,
     };
 
-    const directionLabel =
-        parsed.direction === ConversionDirection.PNL_TO_XML ? 'PNL → XML' : 'XML → PNL';
+    for (let i = 0; i < argv.length; i++) {
+        const arg = argv[i];
+        const value = (): string => {
+            const next = argv[++i];
+            if (next === undefined) usageError(`option ${arg} needs a value`);
+            return next;
+        };
+        const percentage = (): number => {
+            const parsed = Number(value());
+            if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
+                usageError(`option ${arg} needs a percentage between 0 and 100`);
+            }
+            return parsed;
+        };
 
-    process.stderr.write(`Converting ${directionLabel}: ${parsed.inputPath}\n`);
-
-    try {
-        const converter = new PnlXmlConverter();
-        const result = await converter.convert(options, parsed.direction);
-
-        if (result.stdout) {
-            process.stdout.write(result.stdout);
+        switch (arg) {
+            case '-h':
+            case '--help':
+                process.stdout.write(USAGE);
+                return undefined;
+            case '-v':
+            case '--version':
+                process.stdout.write(`${VERSION}\n`);
+                return undefined;
+            case '--root':
+                options.root = value();
+                break;
+            case '--include':
+                options.include.push(value());
+                break;
+            case '--exclude':
+                options.exclude.push(value());
+                break;
+            case '--sources':
+                options.sources.push(value());
+                break;
+            case '--json':
+                options.json = value();
+                break;
+            case '--cobertura':
+                options.cobertura = value();
+                break;
+            case '--markdown':
+                options.markdown = value();
+                break;
+            case '--min-lines':
+                options.minLines = percentage();
+                break;
+            case '--min-functions':
+                options.minFunctions = percentage();
+                break;
+            case '--allow-empty':
+                options.allowEmpty = true;
+                break;
+            case '--verbose':
+                options.verbose = true;
+                break;
+            case '--quiet':
+                options.quiet = true;
+                break;
+            default:
+                if (arg.startsWith('-')) usageError(`unknown option ${arg}`);
+                options.inputs.push(arg);
         }
-        if (result.stderr) {
-            process.stderr.write(result.stderr);
-        }
-
-        if (result.success) {
-            process.stderr.write('Conversion completed successfully.\n');
-            process.exitCode = EXIT_OK;
-        } else {
-            process.stderr.write(`Conversion failed with exit code ${result.exitCode}.\n`);
-            process.exitCode = EXIT_CONVERSION_FAILED;
-        }
-    } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        process.stderr.write(`Error: ${message}\n`);
-        process.exitCode = EXIT_CONVERSION_FAILED;
     }
+
+    if (options.inputs.length === 0) usageError('no coverage input given');
+    return options;
 }
 
-// Auto-run only when invoked directly (not when imported for testing)
-const isDirectRun =
-    process.argv[1] &&
-    (process.argv[1].endsWith('cli.js') ||
-        process.argv[1].endsWith('cli.ts') ||
-        process.argv[1].endsWith('cli.cjs') ||
-        process.argv[1].endsWith('cli.mjs'));
-
-if (isDirectRun) {
-    main();
+function writeOutput(file: string, content: string): void {
+    fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
+    fs.writeFileSync(file, content, 'utf8');
 }
 
-// Export for testing
-export { parseArgs, printUsage, main };
+function run(argv: string[]): number {
+    const options = parseArguments(argv);
+    if (!options) return 0;
+
+    const { data, inputs, warnings } = readCoverage(options.inputs);
+    const detailed = buildDetailedReport(data, {
+        root: options.root,
+        include: options.include,
+        exclude: options.exclude,
+        sources: options.sources,
+        inputs,
+        warnings,
+    });
+    const { report } = detailed;
+
+    if (report.summary.files === 0 && !options.allowEmpty) {
+        throw new CoverageInputError(
+            `no coverage data for any file in ${inputs.length} input file(s); check --include/--exclude/--root or use --allow-empty`,
+        );
+    }
+
+    // Render everything before writing anything, so a failure never leaves partial outputs.
+    const outputs: [string, string][] = [];
+    if (options.json) outputs.push([options.json, renderJson(report)]);
+    if (options.markdown) outputs.push([options.markdown, renderMarkdown(report)]);
+    if (options.cobertura) {
+        outputs.push([
+            options.cobertura,
+            renderCobertura({
+                ...detailed,
+                sourceRoot: options.root ? path.resolve(options.root) : '.',
+                timestamp: Date.now(),
+            }),
+        ]);
+    }
+    for (const [file, content] of outputs) writeOutput(file, content);
+
+    if (!options.quiet) process.stdout.write(renderText(report, options.verbose));
+
+    const failures: string[] = [];
+    if (options.minLines !== undefined && report.summary.lines.rate * 100 < options.minLines) {
+        failures.push(
+            `line coverage ${(report.summary.lines.rate * 100).toFixed(1)}% is below ${options.minLines}%`,
+        );
+    }
+    if (
+        options.minFunctions !== undefined &&
+        report.summary.functions.rate * 100 < options.minFunctions
+    ) {
+        failures.push(
+            `function coverage ${(report.summary.functions.rate * 100).toFixed(1)}% is below ${options.minFunctions}%`,
+        );
+    }
+    for (const failure of failures) process.stderr.write(`error: ${failure}\n`);
+    return failures.length > 0 ? 1 : 0;
+}
+
+try {
+    process.exitCode = run(process.argv.slice(2));
+} catch (error) {
+    process.stderr.write(`error: ${(error as Error).message}\n`);
+    process.exitCode = 2;
+}

@@ -1,72 +1,68 @@
-/**
- * Conversion direction for PNL ⇄ XML transformations.
- */
-export enum ConversionDirection {
-    /** Convert .pnl panel files to .xml */
-    PNL_TO_XML = 'XML',
-    /** Convert .xml files back to .pnl panels */
-    XML_TO_PNL = 'PNL',
+/** Executed/total counters with the resulting rate as a fraction in the range 0..1. */
+export interface Rate {
+    covered: number;
+    total: number;
+    /** `covered / total`, or `0` when `total` is `0`. */
+    rate: number;
 }
 
-/**
- * Options for the PNL ⇄ XML conversion process.
- */
-export interface ConversionOptions {
-    /**
-     * WinCC OA version to use (e.g., '3.20').
-     * Required to locate the correct WCCOAui executable.
-     */
-    version: string;
-
-    /**
-     * Path to the panel file (.pnl) or directory to convert.
-     *
-     * WCCOAui resolves this path **relative to the project's `panels/`
-     * directory**, so typically a bare filename like `"about.pnl"` or a
-     * sub-path like `"sub/myPanel.pnl"` is expected — not an absolute path.
-     */
-    inputPath: string;
-
-    /**
-     * Whether to overwrite existing output files.
-     * Maps to the `-o` flag of the UI manager.
-     * @default false
-     */
-    overwrite?: boolean;
-
-    /**
-     * Path to the WinCC OA project config file.
-     * Allows WCCOAui to locate a valid project context without registration.
-     * Maps to the `-config` flag of the UI manager.
-     */
-    configPath?: string;
-
-    /**
-     * Timeout in milliseconds for the conversion process.
-     * @default 60000
-     */
-    timeout?: number;
+export interface FunctionCoverage {
+    name: string;
+    signature: string;
+    /** Declaration line, `-1` for the synthetic `[init script globals]` function. */
+    line: number;
+    /** Number of calls. */
+    count: number;
+    branchesTotal: number;
+    branchesExecuted: number;
 }
 
-/**
- * Result of a PNL ⇄ XML conversion operation.
- */
-export interface ConversionResult {
-    /** Whether the conversion completed successfully (exit code 0). */
-    success: boolean;
+export interface FileCoverage {
+    /** Normalized path (forward slashes). */
+    path: string;
+    /** Line number to hit count (maximum over all merged inputs). */
+    lines: Map<number, number>;
+    /** Function key (`name|signature|line`) to merged function data. */
+    functions: Map<string, FunctionCoverage>;
+}
 
-    /** Process exit code. */
-    exitCode: number;
+export interface CoverageData {
+    files: Map<string, FileCoverage>;
+}
 
-    /** Standard output captured from the UI manager process. */
-    stdout: string;
+export interface ParsedScript {
+    path: string;
+    lines: Map<number, number>;
+    functions: FunctionCoverage[];
+}
 
-    /** Standard error output captured from the UI manager process. */
-    stderr: string;
+export interface ParseResult {
+    scripts: ParsedScript[];
+    warnings: string[];
+}
 
-    /** The input path that was converted. */
-    inputPath: string;
+export interface FileSummary {
+    path: string;
+    lines: Rate;
+    functions: Rate;
+    branches: Rate;
+}
 
-    /** The conversion direction used. */
-    direction: ConversionDirection;
+export interface CoverageSummary {
+    /** Files with coverage data (untested files are not counted). */
+    files: number;
+    lines: Rate;
+    functions: Rate;
+    branches: Rate;
+}
+
+export interface CoverageReport {
+    schemaVersion: 1;
+    tool: { name: string; version: string };
+    inputs: string[];
+    summary: CoverageSummary;
+    files: FileSummary[];
+    /** Sources found by `sources` that have no coverage data; excluded from all rates. */
+    untested: string[];
+    warnings: string[];
 }
