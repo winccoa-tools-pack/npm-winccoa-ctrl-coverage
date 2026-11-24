@@ -1,4 +1,5 @@
 # Auto-approve owner PRs that receive no review within 3 days.
+# (Schedule/dispatch only.)
 #
 # Uses the reusable action: https://github.com/mPokornyETM/auto-approve-stale-prs
 #
