@@ -97,9 +97,9 @@ A `<script>` without a `<file path>` is skipped with a warning (printed and stor
 - The files are large (several MB per manager); merging 9 files / 33 MB takes about one second.
 - `.zip` archives (for example stored test projects) are not read directly; extract them first.
 
-## Relationship to Siemens `ctlCoverageReport`
+## Origin and license
 
-This package is a clean-room implementation of the documented `CovRep` XML structure and does not contain code from the Siemens CtrlppCheck tool. See [docs/reuse-review.md](docs/reuse-review.md).
+This package does not reuse, adapt or fork an existing coverage reporter. It is based only on the `CovRep` XML that WinCC OA itself writes. See [docs/origin.md](docs/origin.md).
 
 ## Development
 

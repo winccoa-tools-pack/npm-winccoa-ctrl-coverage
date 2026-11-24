@@ -19,7 +19,7 @@
   },
   "files": [
     "dist",
-    "docs/reuse-review.md"
+    "docs/origin.md"
   ],
   "scripts": {
     "build:types": "tsc -p tsconfig.build.types.json",
