@@ -1,7 +1,7 @@
 # Repository settings applied via GitHub REST API by .github/workflows/apply-settings-and-rulesets.yml
 # This repo uses GitFlow: develop is default, main is stable release.
 
-description: "The template for WinCC OA NPM packages"
+description: "CLI and API to merge WinCC OA CTRL coverage reports (CovRep XML) into text, JSON, Markdown and Cobertura reports"
 homepage: "https://github.com/winccoa-tools-pack"
 default_branch: "develop"
 
