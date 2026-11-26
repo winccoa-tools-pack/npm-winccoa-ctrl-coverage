@@ -1,6 +1,6 @@
 {
   "name": "@winccoa-tools-pack/npm-winccoa-ctrl-coverage",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "CLI and API to merge WinCC OA CTRL coverage reports (CovRep XML) into text, JSON, Markdown and Cobertura reports",
   "author": "winccoa-tools-pack",
   "license": "MIT",
@@ -51,8 +51,11 @@
     "prettier": "^3.10.1",
     "ts-node": "^10.9.1",
     "tsx": "^4.23.15",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "typescript-eslint": "^8.73.0"
+  },
+  "overrides": {
+    "katex": "^0.18.2"
   },
   "engines": {
     "node": ">=20"
