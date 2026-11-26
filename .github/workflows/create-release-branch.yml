@@ -1,4 +1,3 @@
-# Manual only (workflow_dispatch). Normally the release planner creates the release branch.
 name: Create Release Branch + PR
 
 on:
